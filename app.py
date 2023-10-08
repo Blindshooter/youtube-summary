@@ -32,10 +32,10 @@ with st.sidebar:
     if yt_url:
         yt_video = YouTube(yt_url)
         v_id = pytube.extract.video_id(yt_url)
-        print(v_id)
+        # print(v_id)
 
         streams = yt_video.streams.filter(only_audio=True)
-        print(streams)
+        # print(streams)
         stream = streams[0]
 
         if st.button("Start Analysis"):
@@ -69,7 +69,7 @@ with st.sidebar:
 
                 st.success("Transcription is done. File saved as transcript.txt")
 
-                print(transcript)
+                # print(transcript)
 
 
 # tab1, tab2, tab3, tab4, tab5 = st.tabs(["How does this work", "Transcript", "Summary", "Talk to the video", "Embeddings"])
