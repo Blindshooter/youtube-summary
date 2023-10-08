@@ -32,10 +32,9 @@ with st.sidebar:
     if yt_url:
         yt_video = YouTube(yt_url)
         v_id = pytube.extract.video_id(yt_url)
-        # print(v_id)
 
         streams = yt_video.streams.filter(only_audio=True)
-        # print(streams)
+
         stream = streams[0]
 
         if st.button("Start Analysis"):
