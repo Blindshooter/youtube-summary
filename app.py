@@ -59,6 +59,7 @@ with st.sidebar:
 
                 # if subtitles:
                 #     st.success("Found subtitles")
+                
                 st.success("Started transcription")
 
                 transcript = transcribe_whisper(model)
@@ -79,6 +80,11 @@ with tab1:
     st.write("This is an app that will allow you to summarise youtube video and chat with them")
     st.write("We use the youtube api or whisper to get the transcript of the video and then use the openai api to summarise the video")
     st.write("We then use the openai api to chat with the video")
+    st.write("/n")
+    st.write("<h2>How to use</h2>", unsafe_allow_html=True)
+    st.write("1. Enter your openai api key in the sidebar - this is only for summarisation and chatting with the video")
+    st.write("2. Enter the youtube url of the video you want to summarise")
+    st.write("3. Click on the start analysis button")
 
 # TODO Extract transcript of the video using youtube api or whisper
 with tab2:
