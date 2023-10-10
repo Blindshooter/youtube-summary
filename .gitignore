@@ -1,5 +1,7 @@
 yt-sum/
 test.ipynb
 youtube_video.mp4
-transcript.txt
+transcript*.txt
 *.pyc
+summary.txt
+.DS_Store

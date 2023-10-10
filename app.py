@@ -10,14 +10,13 @@ import whisper
 import pytube
 from pytube import YouTube
 
-from helpers import transcribe_whisper, check_subtitles, generate_summary
 
-from langchain import OpenAI
-from langchain.chains.summarize import load_summarize_chain
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain import PromptTemplate
+from langchain.llms import OpenAI
+from helpers import transcribe_whisper, generate_summary
 
-
+# from langchain.chains.summarize import load_summarize_chain
+# from langchain.text_splitter import RecursiveCharacterTextSplitter
+# from langchain.prompts import PromptTemplate
 
 st.markdown("<h1>Youtube video summarizer</h1>", unsafe_allow_html=True)
 st.write("This is an app that will allow you to summarise youtube video and chat with it")
@@ -68,8 +67,13 @@ with st.sidebar:
                 #     st.success("Found subtitles")
                 
                 st.success("Started transcription")
+                # TRANSCRIPT TAKES A LONG TIME
 
                 transcript = transcribe_whisper(model)
+
+                # with open("transcript.txt") as f:
+                #     transcript = f.read()
+
                 # save transcript to file
                 with open('transcript.txt', 'w') as f:
                     f.write(transcript)
@@ -111,29 +115,29 @@ with tab2:
 with tab3:
     st.header("Summary")
     st.write("This is the summary of the video")
-    if transcript!="":
-        if st.button("Generate summary"):
-            # if os.path.exists('summary.txt'):
-            #     os.remove('summary.txt')
-            llm = OpenAI(temperature=0, openai_api_key=user_secret)
-            with st.spinner("Generating summary"):
-                openai.api_key = user_secret
-                response = generate_summary(transcript)
+    if transcript != "":
+        st.write("Transcript found")
+        print(user_secret)
 
-                summary = response.choices[0].text
+        llm = OpenAI(temperature=0, openai_api_key=user_secret)
 
-                with open('summary.txt', 'w') as f:
-                    f.write(summary)
+        # with st.spinner("Generating summary"):
 
-                st.success("Summary generated")
-                st.write(summary)
+        summary = generate_summary(transcript, llm)
+
+        with open('summary.txt', 'w') as f:
+            f.write(summary)
+
+        st.success("---Summary generated---")
+        st.write(summary)
     else:
-        st.write("No summary found")
+        pass
 
 # TODO Build vector DB and chat with the video
 with tab4:
     st.header("Talk to the video")
-    # user_secret = st.text_input(label=":red[OPENAI API KEY]", placeholder="Enter your openai API key", type="password")
+    st.write("This is the chat with the video")
+    pass
 
 # with tab5:
 #     st.header("Embeddings")
