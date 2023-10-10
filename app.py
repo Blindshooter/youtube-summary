@@ -10,7 +10,14 @@ import whisper
 import pytube
 from pytube import YouTube
 
-from helpers import transcribe_whisper, check_subtitles
+from helpers import transcribe_whisper, check_subtitles, generate_summary
+
+from langchain import OpenAI
+from langchain.chains.summarize import load_summarize_chain
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain import PromptTemplate
+
+
 
 st.markdown("<h1>Youtube video summarizer</h1>", unsafe_allow_html=True)
 st.write("This is an app that will allow you to summarise youtube video and chat with it")
@@ -80,7 +87,7 @@ with tab1:
     st.write("This is an app that will allow you to summarise youtube video and chat with them")
     st.write("We use the youtube api or whisper to get the transcript of the video and then use the openai api to summarise the video")
     st.write("We then use the openai api to chat with the video")
-    st.write("/n")
+  
     st.write("<h2>How to use</h2>", unsafe_allow_html=True)
     st.write("1. Enter your openai api key in the sidebar - this is only for summarisation and chatting with the video")
     st.write("2. Enter the youtube url of the video you want to summarise")
@@ -104,10 +111,22 @@ with tab2:
 with tab3:
     st.header("Summary")
     st.write("This is the summary of the video")
-    if (os.path.exists('summary.txt')):
-        with open('summary.txt', 'r') as f:
-            summary = f.read()
-            st.write(summary)
+    if transcript!="":
+        if st.button("Generate summary"):
+            # if os.path.exists('summary.txt'):
+            #     os.remove('summary.txt')
+            llm = OpenAI(temperature=0, openai_api_key=user_secret)
+            with st.spinner("Generating summary"):
+                openai.api_key = user_secret
+                response = generate_summary(transcript)
+
+                summary = response.choices[0].text
+
+                with open('summary.txt', 'w') as f:
+                    f.write(summary)
+
+                st.success("Summary generated")
+                st.write(summary)
     else:
         st.write("No summary found")
 
