@@ -65,3 +65,6 @@ def generate_summary(text, llm):
     summary = summary_chain.run(docs)
 
     return summary
+
+def get_embeddings():
+    raise NotImplementedError

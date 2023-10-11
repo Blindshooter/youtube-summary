@@ -12,7 +12,18 @@ from pytube import YouTube
 
 
 from langchain.llms import OpenAI
-from helpers import transcribe_whisper, generate_summary
+# from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+from langchain.vectorstores import Chroma
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains import ConversationalRetrievalChain
+# from langchain.chat_models import ChatOpenAI
+# from langchain.document_loaders import UnstructuredFileLoader
+# from langchain.document_loaders.image import UnstructuredImageLoader
+# from langchain.document_loaders import ImageCaptionLoader
+# from langchain.docstore.document import Document
+
+from helpers import transcribe_whisper, generate_summary, get_embeddings
 
 # from langchain.chains.summarize import load_summarize_chain
 # from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -69,10 +80,10 @@ with st.sidebar:
                 st.success("Started transcription")
                 # TRANSCRIPT TAKES A LONG TIME
 
-                transcript = transcribe_whisper(model)
+                # transcript = transcribe_whisper(model)
 
-                # with open("transcript.txt") as f:
-                #     transcript = f.read()
+                with open("transcript.txt") as f:
+                    transcript = f.read()
 
                 # save transcript to file
                 with open('transcript.txt', 'w') as f:
@@ -86,7 +97,6 @@ with st.sidebar:
 # tab1, tab2, tab3, tab4, tab5 = st.tabs(["How does this work", "Transcript", "Summary", "Talk to the video", "Embeddings"])
 tab1, tab2, tab3, tab4 = st.tabs(["How does this work", "Transcript", "Summary", "Talk to the video"])
 
-# TODO Add description if how this works.
 with tab1:
     st.write("This is an app that will allow you to summarise youtube video and chat with them")
     st.write("We use the youtube api or whisper to get the transcript of the video and then use the openai api to summarise the video")
@@ -97,7 +107,6 @@ with tab1:
     st.write("2. Enter the youtube url of the video you want to summarise")
     st.write("3. Click on the start analysis button")
 
-# TODO Extract transcript of the video using youtube api or whisper
 with tab2:
     st.header("Transcript")
     st.write("This is the transcript of the video")
@@ -111,7 +120,6 @@ with tab2:
     if transcript != "":
         st.write(transcript)
 
-# TODO Extract summary of the video using openai api and langchain
 with tab3:
     st.header("Summary")
     st.write("This is the summary of the video")
@@ -128,7 +136,7 @@ with tab3:
         with open('summary.txt', 'w') as f:
             f.write(summary)
 
-        st.success("---Summary generated---")
+        st.success("Summary generated")
         st.write(summary)
     else:
         pass
@@ -137,7 +145,66 @@ with tab3:
 with tab4:
     st.header("Talk to the video")
     st.write("This is the chat with the video")
-    pass
+
+    if "processed_data" not in st.session_state:
+    #     documents = []
+
+        # if "past" not in st.session_state:
+        #     st.session_state.past = []
+
+        # def get_input():
+        #     if user_secret:
+        #         st.header("Ask me something about the video")
+        #         input_text = st.text_input("Enter your question here", value="", type="default", key = "input_text")
+        #         return input_text
+        
+        # user_input = get_input()
+        
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+        document_chunks = text_splitter.split_documents(transcript)
+
+        embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+        vectorstore = Chroma.from_documents(document_chunks, embedding_function)
+
+        # Store the processed data in session state for reuse
+        st.session_state.processed_data = {
+            "document_chunks": document_chunks,
+            "vectorstore": vectorstore
+            }
+    else:
+        # If the processed data is already available, retrieve it from session state
+        document_chunks = st.session_state.processed_data["document_chunks"]
+        vectorstore = st.session_state.processed_data["vectorstore"]
+
+    qa = ConversationalRetrievalChain.from_llm(llm, vectorstore.as_retriever())
+
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display chat messages from history on app rerun
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Accept user input
+    if prompt := st.chat_input("Ask your questions?"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # Query the assistant using the latest chat history
+        result = qa({"question": prompt, "chat_history": [(message["role"], message["content"]) for message in st.session_state.messages]})
+
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            # full_response = ""
+            full_response = result["answer"]
+            message_placeholder.markdown(full_response + "|")
+        message_placeholder.markdown(full_response)
+        print(full_response)
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 # with tab5:
 #     st.header("Embeddings")
