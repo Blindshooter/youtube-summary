@@ -38,12 +38,12 @@ transcript = ""
 
 # Sidebar
 with st.sidebar:
-    user_secret = st.text_input(label=":red[OpenAI API key]",
+    user_secret = st.text_input(label=":green[OpenAI API key]",
                                 value="",
                                 placeholder="",
                                 type="password")
 
-    yt_url = st.text_input(label=":red[Youtube URL]", value="", placeholder="", type="default")
+    yt_url = st.text_input(label=":green[Youtube URL]", value="", placeholder="", type="default")
 
 # if user_secret and yt_url:
     if yt_url:
@@ -80,10 +80,10 @@ with st.sidebar:
                 st.success("Started transcription")
                 # TRANSCRIPT TAKES A LONG TIME
 
-                # transcript = transcribe_whisper(model)
+                transcript = transcribe_whisper(model)
 
-                with open("transcript.txt") as f:
-                    transcript = f.read()
+                # with open("transcript.txt") as f:
+                #     transcript = f.read()
 
                 # save transcript to file
                 with open('transcript.txt', 'w') as f:
@@ -101,6 +101,7 @@ with tab1:
     st.write("This is an app that will allow you to summarise youtube video and chat with them")
     st.write("We use the youtube api or whisper to get the transcript of the video and then use the openai api to summarise the video")
     st.write("We then use the openai api to chat with the video")
+    st.write("UPDATE: For some reason Streamlit doesn't support chat function inside the tab. So I have moved the chat function to the bottom of the page")
   
     st.write("<h2>How to use</h2>", unsafe_allow_html=True)
     st.write("1. Enter your openai api key in the sidebar - this is only for summarisation and chatting with the video")
@@ -125,7 +126,7 @@ with tab3:
     st.write("This is the summary of the video")
     if transcript != "":
         st.write("Transcript found")
-        print(user_secret)
+        # print(user_secret)
 
         llm = OpenAI(temperature=0, openai_api_key=user_secret)
 
@@ -143,79 +144,46 @@ with tab3:
 
 # TODO Build vector DB and chat with the video
 with tab4:
-    st.header("Talk to the video")
-    st.write("This is the chat with the video")
-
-    if "processed_data" not in st.session_state:
-    #     documents = []
-
-        # if "past" not in st.session_state:
-        #     st.session_state.past = []
-
-        # def get_input():
-        #     if user_secret:
-        #         st.header("Ask me something about the video")
-        #         input_text = st.text_input("Enter your question here", value="", type="default", key = "input_text")
-        #         return input_text
-        
-        # user_input = get_input()
-        
+    if transcript != "":
+        st.header("Talk to the video")
+        st.write("This is the chat with the video")
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
-        document_chunks = text_splitter.split_documents(transcript)
+
+        document_chunks = text_splitter.create_documents([transcript])
+
+        # st.write(document_chunks)
 
         embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
         vectorstore = Chroma.from_documents(document_chunks, embedding_function)
 
-        # Store the processed data in session state for reuse
-        st.session_state.processed_data = {
-            "document_chunks": document_chunks,
-            "vectorstore": vectorstore
-            }
-    else:
-        # If the processed data is already available, retrieve it from session state
-        document_chunks = st.session_state.processed_data["document_chunks"]
-        vectorstore = st.session_state.processed_data["vectorstore"]
 
-    qa = ConversationalRetrievalChain.from_llm(llm, vectorstore.as_retriever())
+        qa = ConversationalRetrievalChain.from_llm(llm, vectorstore.as_retriever())
 
-    # Initialize chat history
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        # Initialize chat history
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    # Display chat messages from history on app rerun
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        # Display chat messages from history on app rerun
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
-    # Accept user input
-    if prompt := st.chat_input("Ask your questions?"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        # Accept user input
+        if prompt := st.chat_input("Ask your questions?"):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # Query the assistant using the latest chat history
-        result = qa({"question": prompt, "chat_history": [(message["role"], message["content"]) for message in st.session_state.messages]})
+            # Query the assistant using the latest chat history
+            result = qa({"question": prompt, "chat_history": [(message["role"], message["content"]) for message in st.session_state.messages]})
 
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            # full_response = ""
-            full_response = result["answer"]
-            message_placeholder.markdown(full_response + "|")
-        message_placeholder.markdown(full_response)
-        print(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-# with tab5:
-#     st.header("Embeddings")
-#     st.write("This is the embeddings of the video")
-#     if (os.path.exists('embeddings.csv')):
-#         with open('embeddings.csv', 'r') as f:
-#             embeddings = f.read()
-#             st.write(embeddings)
-#     else:
-#         st.write("No embeddings found")
-
-    # if generated not in st.session_state:
-    #     st.session_state.generated = False
+            # Display assistant response in chat message container
+            with st.chat_message("assistant"):
+                message_placeholder = st.empty()
+                # full_response = ""
+                full_response = result["answer"]
+                message_placeholder.markdown(full_response + "|")
+            message_placeholder.markdown(full_response)
+            print(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
 
