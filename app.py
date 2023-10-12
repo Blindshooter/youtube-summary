@@ -1,40 +1,23 @@
 import streamlit as st
-import pandas as pd
-
 import os
 
-import openai
-
+from youtube_utils import get_video_info, generate_subtitles
+from functions import generate_summary  # , get_answer
 import whisper
 
-import pytube
-from pytube import YouTube
-
-
 from langchain.llms import OpenAI
-# from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.embeddings.sentence_transformer import SentenceTransformerEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import ConversationalRetrievalChain
-# from langchain.chat_models import ChatOpenAI
-# from langchain.document_loaders import UnstructuredFileLoader
-# from langchain.document_loaders.image import UnstructuredImageLoader
-# from langchain.document_loaders import ImageCaptionLoader
-# from langchain.docstore.document import Document
 
-from helpers import transcribe_whisper, generate_summary, get_embeddings
+process_video = None
+process_question = None
+go_to_timestamp = None
 
-# from langchain.chains.summarize import load_summarize_chain
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain.prompts import PromptTemplate
-
-st.markdown("<h1>Youtube video summarizer</h1>", unsafe_allow_html=True)
-st.write("This is an app that will allow you to summarise youtube video and chat with it")
+st.set_page_config(
+    page_title='YouTube Q & A',
+    layout='wide',
+    initial_sidebar_state='expanded')
 
 model = whisper.load_model('base')
 transcript = ""
-
 
 # Sidebar
 with st.sidebar:
@@ -43,147 +26,147 @@ with st.sidebar:
                                 placeholder="",
                                 type="password")
 
-    yt_url = st.text_input(label=":green[Youtube URL]", value="", placeholder="", type="default")
+    yt_url = st.text_input(label=":green[Youtube URL]",
+                           value="https://www.youtube.com/watch?v=jDsQmbCei7g&t=3s&ab_channel=TheProfGShow%E2%80%93ScottGalloway",
+                           placeholder="", type="default")
 
 # if user_secret and yt_url:
     if yt_url:
-        yt_video = YouTube(yt_url)
-        v_id = pytube.extract.video_id(yt_url)
-
-        streams = yt_video.streams.filter(only_audio=True)
-
-        stream = streams[0]
-
         if st.button("Start Analysis"):
             if os.path.exists('youtube_video.mp4'):
                 os.remove('youtube_video.mp4')
+            stream, title = get_video_info(yt_url)
+            st.write(title)
+            st.video(yt_url)
 
-            if os.path.exists('summary.txt'):
-                os.remove('summary.txt')
+            audio = open('youtube_video.mp4', 'rb')
+            st.audio(audio, format='audio/mp4')
 
-            if os.path.exists('embeddings.csv'):
-                os.remove('embeddings.csv')
+            with st.spinner("Processing. If video is long, this may take a while - around 4 minutes for a 20 minute video."):
 
-            with st.spinner("Downloading video"):
-                st.write(yt_video.title)
-                st.video(yt_url)
-
-                stream.download(filename="youtube_video.mp4")
-                audio = open('youtube_video.mp4', 'rb')
-                st.audio(audio, format='audio/mp4')
-
-                # subtitles = check_subtitles(yt_video)
-
-                # if subtitles:
-                #     st.success("Found subtitles")
-                
-                st.success("Started transcription")
-                # TRANSCRIPT TAKES A LONG TIME
-
-                transcript = transcribe_whisper(model)
-
-                # with open("transcript.txt") as f:
-                #     transcript = f.read()
-
-                # save transcript to file
-                with open('transcript.txt', 'w') as f:
-                    f.write(transcript)
+                transcript = generate_subtitles(stream, model, test=True)
+                process_video = True
 
                 st.success("Transcription is done. File saved as transcript.txt")
 
-                # print(transcript)
+# main page
 
+st.title(":video_camera: YouTube Video Q and A")
 
-# tab1, tab2, tab3, tab4, tab5 = st.tabs(["How does this work", "Transcript", "Summary", "Talk to the video", "Embeddings"])
-tab1, tab2, tab3, tab4 = st.tabs(["How does this work", "Transcript", "Summary", "Talk to the video"])
+st.write("This is an app that will allow you to summarise youtube videos and chat with them")
+st.write("We use whisper to get the transcript of the video and then use the openai api to summarise the video")
+st.write("We then use the openai api and langchain to chat with the video")
 
-with tab1:
-    st.write("This is an app that will allow you to summarise youtube video and chat with them")
-    st.write("We use the youtube api or whisper to get the transcript of the video and then use the openai api to summarise the video")
-    st.write("We then use the openai api to chat with the video")
-    st.write("UPDATE: For some reason Streamlit doesn't support chat function inside the tab. So I have moved the chat function to the bottom of the page")
-  
-    st.write("<h2>How to use</h2>", unsafe_allow_html=True)
-    st.write("1. Enter your openai api key in the sidebar - this is only for summarisation and chatting with the video")
-    st.write("2. Enter the youtube url of the video you want to summarise")
-    st.write("3. Click on the start analysis button")
+st.write("<h2>How to use the app</h2>", unsafe_allow_html=True)
+st.write("1. Enter your openai api key in the sidebar - this is only for summarisation and chatting with the video")
+st.write("2. Enter the youtube url of the video from Youtube")
+st.write("3. Click on the start analysis button")
 
-with tab2:
-    st.header("Transcript")
-    st.write("This is the transcript of the video")
-    if (os.path.exists('youtube_video.mp4')):
-        audio_file = open('youtube_video.mp4', 'rb')
-        audio = audio_file.read()
-        st.audio(audio, format='audio/mp4')
-    else:
-        st.write("No video found")
+st.header("Summary")
 
-    if transcript != "":
-        st.write(transcript)
+if transcript != "":
 
-with tab3:
-    st.header("Summary")
-    st.write("This is the summary of the video")
-    if transcript != "":
-        st.write("Transcript found")
-        # print(user_secret)
+    llm = OpenAI(temperature=0, openai_api_key=user_secret)
 
-        llm = OpenAI(temperature=0, openai_api_key=user_secret)
-
-        # with st.spinner("Generating summary"):
+    with st.spinner("Generating summary"):
 
         summary = generate_summary(transcript, llm)
 
-        with open('summary.txt', 'w') as f:
-            f.write(summary)
+    # print(summary)
+    with open('summary.txt', 'w') as f:
+        f.write(summary)
 
-        st.success("Summary generated")
-        st.write(summary)
-    else:
-        pass
+    st.success("Summary generated")
+    st.write("This is the summary of the video")
+    st.write(summary)
+else:
+    pass
 
-# TODO Build vector DB and chat with the video
-with tab4:
-    if transcript != "":
-        st.header("Talk to the video")
-        st.write("This is the chat with the video")
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+process_question = None
 
-        document_chunks = text_splitter.create_documents([transcript])
+@st.cache_data
+def call_get_answer(question):
+    return get_answer(question)
 
-        # st.write(document_chunks)
+if 'process_question_clicked' not in st.session_state:
+    st.session_state.process_question_clicked = False
 
-        embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-        vectorstore = Chroma.from_documents(document_chunks, embedding_function)
+def process_question_callback():
+    st.session_state.process_question_clicked = True
 
 
-        qa = ConversationalRetrievalChain.from_llm(llm, vectorstore.as_retriever())
+if summary != "":
+    col_1, col_2 = st.columns([0.8, 0.2])
+    with col_1:
+        question = st.text_input(label='Question', label_visibility='collapsed')
+    with col_2:
+        process_question = st.button('Get Answer', on_click=process_question_callback)
 
-        # Initialize chat history
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
 
-        # Display chat messages from history on app rerun
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+# program variables and functions
 
-        # Accept user input
-        if prompt := st.chat_input("Ask your questions?"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+# @st.cache_data
+# def call_get_summary(transcript, _llm):
+#     return generate_summary(transcript, llm)
 
-            # Query the assistant using the latest chat history
-            result = qa({"question": prompt, "chat_history": [(message["role"], message["content"]) for message in st.session_state.messages]})
 
-            # Display assistant response in chat message container
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                # full_response = ""
-                full_response = result["answer"]
-                message_placeholder.markdown(full_response + "|")
-            message_placeholder.markdown(full_response)
-            print(full_response)
-            st.session_state.messages.append({"role": "assistant", "content": full_response})
+# @st.cache_data
+# def call_get_answer(question):
+#     return get_answer(question)
 
+# # session state management
+
+# if process_video or st.session_state.process_video_clicked:
+#     if yt_url == "":
+#         st.error("Please provide a valid link!")
+#         exit(0)
+
+#     st.session_state.process_video_clicked = True
+#     st.divider()
+#     container_1 = st.container()
+#     with container_1:
+#         with st.spinner('Generating summary...'):
+#             llm = OpenAI(temperature=0, openai_api_key=user_secret)
+#             summary = generate_summary(transcript, llm)
+#         if summary == '':
+#             st.error(summary)
+#             exit(0)
+#         else:
+#             st.text('Summary of the video:')
+#             summary_box = st.text_area(
+#                 label='Summary',
+#                 label_visibility='collapsed',
+#                 value=summary,
+#                 disabled=True,
+#                 height=300)
+#         st.divider()
+#         st.text('Type your question here: ')
+        # col_1, col_2 = st.columns([0.8, 0.2])
+        # with col_1:
+        #     question = st.text_input(
+        #         label = 'Question',
+        #         label_visibility = 'collapsed',
+        #         )
+        # with col_2:
+        #     process_question = st.button('Get Answer', on_click=process_question_callback)
+
+# answer container
+
+if process_question or st.session_state.process_question_clicked:
+    container_3 = st.container()
+    with container_3:
+        with st.spinner('Finding answer...'):
+            status, data = call_get_answer(question)
+            if status != 'success':
+                st.error(data)
+                exit(0)
+            else:
+                answer, st.session_state.timestamp = data[0], data[1]
+        st.text('The answer to your question: ')
+
+        answer_box = st.text_area(
+            label='Answer',
+            label_visibility='collapsed',
+            value=answer,
+            disabled=True,
+            height=300)
